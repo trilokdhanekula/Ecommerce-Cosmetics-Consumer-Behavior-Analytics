@@ -1,0 +1,355 @@
+---
+title: "Assignment"
+author: "Deekshu Freelancer"
+date: "2023-11-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r,message=FALSE,warning=FALSE}
+library(tidyverse)
+library(lubridate)
+```
+
+### Reading the data
+```{r}
+df = read.csv("2019-Oct.csv")
+df
+```
+
+### Frequency tables of categorical variables
+
+```{r}
+table(df$event_type)
+```
+
+```{r}
+table(df$category_code)
+```
+
+
+```{r}
+table(df$brand)
+```
+
+
+### Visualisation of frequency tables
+
+```{r}
+count_data <- df %>%
+  group_by(event_type) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  mutate(event_type = factor(event_type, levels = event_type))
+
+ggplot(data = count_data, aes(x = event_type, y = count)) +
+  geom_bar(stat = "identity", fill = "red") +
+  labs(title = "Event Type Counts",
+       x = "Event Type",
+       y = "Count") +
+  theme_minimal() + geom_text(aes(label=count), vjust=1.6, color="black",
+            position = position_dodge(0.9), size=3.5)
+```
+
+
+```{r}
+count_data <- df %>%
+  group_by(category_code) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  mutate(category_code = factor(category_code, levels = category_code))
+
+ggplot(data = count_data, aes(x = category_code, y = count)) +
+  geom_bar(stat = "identity", fill = "red") +
+  labs(title = "category code Counts",
+       x = "category code",
+       y = "Count") +
+  theme_minimal() + geom_text(aes(label=count),color="black")+ coord_flip()
+```
+
+
+```{r}
+count_data <- df %>%
+  group_by(brand) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  mutate(brand = factor(brand, levels = brand))
+
+ggplot(data = count_data, aes(x = brand, y = count,)) +
+  geom_bar(stat = "identity", fill = "red") +
+  labs(title = "brand Type Counts",
+       x = "brand",
+       y = "Count") +
+  theme_minimal() + coord_flip()
+```
+
+```{r}
+count_data <- df %>%
+  group_by(brand) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  mutate(brand = factor(brand, levels = brand)) %>% head(10)
+
+ggplot(data = count_data, aes(x = brand, y = count)) +
+  geom_bar(stat = "identity", fill = "red") +
+  labs(title = "brand Type Counts ( top 10 )",
+       x = "brand",
+       y = "Count") +
+  theme_minimal() + coord_flip()
+```
+
+### Price Distrivution 
+```{r}
+ggplot(df, aes(x = price)) +
+  geom_histogram(binwidth = 10, fill = "blue", color = "black") +
+  labs(title = "Price Distribution", x = "Price", y = "Frequency") +
+  theme_minimal()
+```
+The distribution of price is rightly skewed
+
+### Summary Statistics
+
+```{r}
+summary(df)
+```
+
+### Data structure
+```{r}
+str(df)
+```
+
+
+### inappropriate values
+
+The variables category_code and brand have inappropriate values like "" which are empty. I will be segregating brand to 0 and 1 wth "" as 0 and rest as 1 . Similary for category_code I'm labelling as Unknown , appliances,accessories,furniture and stationery. it also has sport.diving label which I'll be add into unknown as it has only 2 values from the total data so create a dummy at the time of building a model wont make sense.
+
+```{r}
+
+df$category_code[df$category_code == ""] <- "unknown"
+
+merge_categories <- function(category) {
+  if (grepl("^furniture", category))
+    return("furniture")
+
+  if (grepl("^appliances", category))
+    return("appliances")
+  
+  if (grepl("^accessories", category))
+    return("accessories")
+  
+  if (grepl("^sport", category))
+    return("unknown")
+  
+  return(category)
+}
+
+df$category_code <- sapply(df$category_code, merge_categories)
+
+df$brand = ifelse(df$brand == "",0,1)
+```
+
+
+### Oultier detection and removal
+```{r}
+Q1 <- quantile(df$price, 0.25, na.rm = TRUE)
+Q3 <- quantile(df$price, 0.75, na.rm = TRUE)
+IQR <- Q3 - Q1
+
+lower_bound <- Q1 - 1.5 * IQR
+upper_bound <- Q3 + 1.5 * IQR
+
+outliers <- df[df$price < lower_bound | df$price > upper_bound, ]
+
+df_no_outliers <- df[df$price >= lower_bound & df$price <= upper_bound, ]
+
+```
+
+### Data structure after outlier removal
+```{r}
+str(df_no_outliers)
+```
+### Visualisation after outlier removal
+### Distribution of Price
+```{r}
+ggplot(df_no_outliers, aes(x = price)) +
+  geom_histogram(fill = "blue", color = "black") +
+  labs(title = "Price Distribution", x = "Price", y = "Frequency") +
+  theme_minimal()
+```
+### Event type count visualisation after outlier removal
+```{r}
+count_data <- df_no_outliers %>%
+  group_by(event_type) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  mutate(event_type = factor(event_type, levels = event_type))
+
+ggplot(data = count_data, aes(x = event_type, y = count)) +
+  geom_bar(stat = "identity", fill = "red") +
+  labs(title = "Event Type Counts",
+       x = "Event Type",
+       y = "Count") +
+  theme_minimal() + geom_text(aes(label=count), vjust=1.6, color="black",
+            position = position_dodge(0.9), size=3.5)
+```
+### Brand type count visualisation after outlier removal
+
+#### 1 = Top known brands ,  0 = local / unknown brands
+```{r}
+count_data <- df_no_outliers %>%
+  group_by(brand) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  mutate(brand = factor(brand, levels = brand))
+
+ggplot(data = count_data, aes(x = brand, y = count)) +
+  geom_bar(stat = "identity", fill = "red") +
+  labs(title = "brand Type Counts",
+       x = "brand Type",
+       y = "Count") +
+  theme_minimal() + geom_text(aes(label=count), vjust=1.6, color="black",
+            position = position_dodge(0.9), size=3.5)
+```
+
+### Category code type count visualisation after outlier removal
+```{r}
+count_data <- df_no_outliers %>%
+  group_by(category_code) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  mutate(category_code = factor(category_code, levels = category_code))
+
+ggplot(data = count_data, aes(x = category_code, y = count)) +
+  geom_bar(stat = "identity", fill = "red") +
+  labs(title = "category_code Type Counts",
+       x = "category_code Type",
+       y = "Count") +
+  theme_minimal() + geom_text(aes(label=count), vjust=1.6, color="black",
+            position = position_dodge(0.9), size=3.5)
+```
+
+### Creation of new variables for EDA
+
+```{r}
+df_no_outliers$event_time = ymd_hms(df_no_outliers$event_time)
+df_no_outliers$day_of_week <- weekdays(df_no_outliers$event_time)
+df_no_outliers$hour <- hour(df_no_outliers$event_time)
+df_no_outliers$time_of_day <- cut(
+  df_no_outliers$hour,
+  breaks = c(0, 12, 18, 24),
+  labels = c("morning", "afternoon", "evening"),
+  include.lowest = TRUE,
+  right = FALSE
+)
+```
+
+
+
+### Dummy variables 
+
+```{r}
+library(fastDummies)
+df = dummy_cols(df_no_outliers, select_columns = c("event_type","category_code"),remove_selected_columns = TRUE)
+```
+
+So the dependent variable is 'event_type_cart'
+
+
+### Exploratory data analysis
+
+### Dealing with event types with time of the day
+```{r}
+df %>% group_by(event_type_cart,time_of_day) %>% summarise(n=n())
+df %>% group_by(event_type_purchase,time_of_day) %>% summarise(n=n())
+df %>% group_by(event_type_remove_from_cart,time_of_day) %>% summarise(n=n())
+df %>% group_by(event_type_view,time_of_day) %>% summarise(n=n())
+```
+
+### Count of event_type_cart with the brand
+
+```{r}
+df %>% group_by(brand,event_type_cart) %>% summarise(n=n()) %>% arrange(desc(n))
+```
+
+### Finding the top user ids, sessions,product id and category id .
+```{r}
+df %>% group_by(product_id) %>% summarise(n=n()) %>% arrange(desc(n))
+df %>% group_by(category_id) %>% summarise(n=n()) %>% arrange(desc(n))
+df %>% group_by(user_id) %>% summarise(n=n()) %>% arrange(desc(n))
+df %>% group_by(user_session) %>% summarise(n=n()) %>% arrange(desc(n))
+```
+
+
+```{r}
+df %>% filter(event_type_cart == 1) %>% group_by(product_id,event_type_cart) %>% summarise(n=n()) %>% arrange(desc(n))
+
+
+df %>% filter(event_type_cart == 1) %>% group_by(category_id,event_type_cart) %>% summarise(n=n()) %>% arrange(desc(n))
+
+df %>% filter(event_type_cart == 1) %>% group_by(user_id,event_type_cart) %>% summarise(n=n()) %>% arrange(desc(n))
+
+df %>% filter(event_type_cart == 1) %>% group_by(user_session,event_type_cart) %>% summarise(n=n()) %>% arrange(desc(n))
+```
+
+### Finding the average price for dependent variable ( Yes / no)
+```{r}
+df %>% group_by(event_type_cart) %>% summarise(n = mean(price))
+```
+
+### Count of event type cart : dependent variable
+```{r}
+table(df$event_type_cart)
+```
+
+
+I'll be using ROSE
+
+```{r}
+df1 = df
+df1 = df1 %>% select(c(category_code_accessories,category_code_apparel.glove,category_code_furniture,category_code_appliances,category_code_stationery.cartrige,category_code_unknown,brand,price,event_type_cart))
+```
+
+```{r}
+df1 = df1 %>% mutate_if(is.integer,as.factor)
+df1$brand = as.factor(df1$brand)
+```
+
+
+```{r}
+library(caret)
+library(ROSE)
+
+
+set.seed(123)
+index <- createDataPartition(df1$event_type_cart, p = 0.8, list = FALSE)
+train_data <- df1[index, ]
+test_data <- df1[-index, ]
+
+data.rose <- ROSE(event_type_cart ~ ., data = train_data, seed = 1)$data
+table(data.rose$event_type_cart)
+
+ctrl <- trainControl(method = "cv", number = 5, classProbs = FALSE)
+model_both <- train(event_type_cart ~ ., data = data.rose, method = "glm", trControl = ctrl)
+
+
+predictions_both <- predict(model_both, newdata = test_data)
+
+conf_matrix_both <- confusionMatrix(predictions_both, test_data$event_type_cart)
+print(conf_matrix_both)
+```
+
+
+### Random Forest
+```{r}
+library(rpart)
+model_dt <- train(event_type_cart ~ ., data = data.rose, method = "rpart", trControl = ctrl)
+
+predictions_dt <- predict(model_dt, newdata = test_data)
+
+conf_matrix_dt <- confusionMatrix(predictions_dt, test_data$event_type_cart)
+print(conf_matrix_dt)
+```
+
